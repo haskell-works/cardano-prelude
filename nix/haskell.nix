@@ -18,12 +18,6 @@ let
       src = ../.;
   };
 
-  projectPackages = lib.attrNames (haskell-nix.haskellLib.selectProjectPackages
-    (haskell-nix.cabalProject {
-      inherit src;
-      compiler-nix-name = "ghc865";
-    }));
-
   # This creates the Haskell package set.
   # https://input-output-hk.github.io/haskell.nix/user-guide/projects/
   pkgSet = haskell-nix.cabalProject  (lib.optionalAttrs stdenv.hostPlatform.isWindows {
@@ -52,17 +46,11 @@ let
           # "stm" "terminfo"
         ];
       }
-
       {
           packages.cardano-prelude.configureFlags = [ "--ghc-option=-Werror" ];
           enableLibraryProfiling = profiling;
       }
     ];
-    # TODO add flags to packages (like cs-ledger) so we can turn off tests that will
-    # not build for windows on a per package bases (rather than using --disable-tests).
-    # configureArgs = lib.optionalString stdenv.hostPlatform.isWindows "--disable-tests";
   });
-
-  haskellBuildUtils = buildPackages.haskellBuildUtils.package;
 in
   pkgSet

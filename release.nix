@@ -8,24 +8,19 @@
 ############################################################################
 
 # The project sources
-{ cardano-node ? { outPath = ./.; rev = "abcdef"; }
-
+{ cardano-prelude ? { outPath = ./.; rev = "abcdef"; }
 
 # Function arguments to pass to the project
 , projectArgs ? {
-    inherit sourcesOverride;
     config = { allowUnfree = false; inHydra = true; };
-    gitrev = cardano-node.rev;
+    gitrev = cardano-prelude.rev;
   }
 
 # The systems that the jobset will be built for.
 , supportedSystems ? [ "x86_64-linux" "x86_64-darwin" ]
 
-# The systems used for cross-compiling (default: linux)
-, supportedCrossSystems ? [ (builtins.head supportedSystems) ]
-
-# Cross compilation to Windows is currently only supported on linux.
-, windowsBuild ? builtins.elem "x86_64-linux" supportedCrossSystems
+# The systems used for cross-compiling
+, supportedCrossSystems ? [ "x86_64-linux" ]
 
 # A Hydra option
 , scrubJobs ? true
@@ -39,24 +34,18 @@
 }:
 
 with (import pkgs.iohkNix.release-lib) {
-  inherit pkgs;
-  inherit supportedSystems supportedCrossSystems scrubJobs projectArgs;
-  packageSet = import cardano-node;
-  gitrev = cardano-node.rev;
+  inherit pkgs supportedSystems supportedCrossSystems scrubJobs projectArgs;
+  packageSet = import cardano-prelude;
+  gitrev = cardano-prelude.rev;
 };
 
 with pkgs.lib;
 
 let
-  makeScripts = cluster: let
-    getScript = name: {
-      x86_64-linux = (pkgsFor "x86_64-linux").scripts.${cluster}.${name};
-      x86_64-darwin = (pkgsFor "x86_64-darwin").scripts.${cluster}.${name};
-    };
-  in {
-    node = getScript "node";
-  };
-
+  testsSupportedSystems = [ "x86_64-linux" "x86_64-darwin" ];
+  # Recurse through an attrset, returning all test derivations in a list.
+  collectTests' = ds: filter (d: elem d.system testsSupportedSystems) (collect isDerivation ds);
+  # Adds the package name to the test derivations for windows-testing-bundle.nix
   # (passthru.identifier.name does not survive mapTestOn)
   collectTests = ds: concatLists (
     mapAttrsToList (packageName: package:
@@ -65,10 +54,7 @@ let
 
   # musl64 disabled for now: https://github.com/NixOS/nixpkgs/issues/43795
   #inherit (systems.examples) mingwW64 musl64;
-
   inherit (systems.examples) mingwW64 musl64;
-
-  inherit (pkgs.commonLib) sources nixpkgs;
 
   jobs = {
     native = mapTestOn (__trace (__toJSON (packagePlatforms project)) (packagePlatforms project));
