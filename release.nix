@@ -56,46 +56,15 @@ let
   in {
     node = getScript "node";
   };
-  mkPins = inputs: pkgs.runCommand "ifd-pins" {} ''
-    mkdir $out
-    cd $out
-    ${lib.concatMapStringsSep "\n" (input: "ln -sv ${input.value} ${input.key}") (lib.attrValues (lib.mapAttrs (key: value: { inherit key value; }) inputs))}
-  '';
-  makeRelease = cluster: {
-    name = cluster;
-    value = {
-      scripts = makeScripts cluster;
-    };
-  };
-  extraBuilds = {
-    # only build nixos tests on first supported system (linux)
-    inherit (pkgsFor (builtins.head  supportedSystems)) nixosTests;
-    # Environments listed in Network Configuration page
-    cardano-deployment = pkgs.iohkNix.cardanoLib.mkConfigHtml { inherit (pkgs.iohkNix.cardanoLib.environments) mainnet testnet shelley_testnet mainnet_candidate; };
-  } // (builtins.listToAttrs (map makeRelease [
-    # Environments we want to build scripts for on hydra
-    "mainnet"
-    "mainnet_candidate"
-    "staging"
-    "shelley_qa"
-    "shelley_staging"
-    "shelley_testnet"
-    "testnet"
-  ]));
 
-  # restrict supported systems to a subset where tests (if exist) are required to pass:
-  testsSupportedSystems = intersectLists supportedSystems [ "x86_64-linux" "x86_64-darwin" ];
-  # Recurse through an attrset, returning all derivations in a list matching test supported systems.
-  collectJobs' = ds: filter (d: elem d.system testsSupportedSystems) (collect isDerivation ds);
-  # Adds the package name to the derivations for windows-testing-bundle.nix
   # (passthru.identifier.name does not survive mapTestOn)
-  collectJobs = ds: concatLists (
+  collectTests = ds: concatLists (
     mapAttrsToList (packageName: package:
-      map (drv: drv // { inherit packageName; }) (collectJobs' package)
+      map (drv: drv // { inherit packageName; }) (collectTests' package)
     ) ds);
 
-  # Remove build jobs for which cross compiling does not make sense.
-  filterJobsCross = filterAttrs (n: _: n != "dockerImage" && n != "shell" && n != "cluster");
+  # musl64 disabled for now: https://github.com/NixOS/nixpkgs/issues/43795
+  #inherit (systems.examples) mingwW64 musl64;
 
   inherit (systems.examples) mingwW64 musl64;
 
